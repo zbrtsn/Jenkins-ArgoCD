@@ -4,7 +4,7 @@ pipeline {
     environment {
         ARGOCD_SERVER = '127.0.0.1:35883' // argocd-server adresi
         ARGOCD_APP = 'app-flask' // argocd uygulamasının ve namespace'in adı.
-        KUBE_CONFIG = '/home/zub/.kube/config' // Jenkins'in kubernetes ile etkileşime girmesi için config dosyasını veriyoruz.
+        KUBECONFIG = credentials('kubeconfig-file') // Jenkins'in kubernetes ile etkileşime girmesi için config dosyasını veriyoruz.
     }
     
     stages {
