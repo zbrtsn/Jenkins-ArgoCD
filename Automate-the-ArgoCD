@@ -1,0 +1,133 @@
+pipeline {
+    agent any
+
+    environment {
+        registryCredential = 'dockerhub-credentials' // docker hub'a login olmayı sağlayacak kullanıcı adı ve parolayı tutan credentials
+        GIT_REPO_URL = 'https://mtgit.mediatriple.net/zubeyir.tosun/private-basic-to-do-flask.git' // GitLab veya GitHub repo adresin
+        DOCKERHUB_REPO = 'pyouck/basic_todo_flask' // docker hub repo adresin
+        ARGOCD_SERVER = '127.0.0.1:35883' // argocd-server adresi
+        ARGOCD_APP = 'app-flask' // argocd uygulamasının adı. Hatta namespace oluşturmayı da bu ada göre yapıyor. istersen aşağıdaki yaml dosyasında değiştirebilirsin.
+        KUBECONFIG = credentials('kubeconfig-file') // 'kubeconfig-id' yüklediğiniz kubeconfig dosyasının ID'sidir. Bu şekilde Jenkins kubernetes ile bağlantıya geçti.
+        
+        // üst kısım harici kod içinde değiştirilecekler:
+        // - GitLab klonlayan adımın "branch" kısmı.
+        // - docker build ve push işlemini yapan adımların "tag" kısımları
+        // - "Check and Manage Secret" adımında "gitlab-login" adında "username with password" türünde gitlab kullanıcı adı ve şifre içeren bir credential oluşturulmalı!
+        // - "Deploy to Kubernetes via ArgoCD" adımında "argocd-password" adında "secret text" türünde argocd'ye giriş yapılırken kullanılan şifreyi içeren bir credential oluşturulmalı!
+        // şifreyi terminalden çekmek için ---> kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
+        // - isteğe göre argocd uygulama oluşturan yaml dosyası değiştirilebilr.
+    }
+
+    stages {
+        
+        stage('Clone Git Repository') {
+            steps {
+                git branch: 'latest', credentialsId: 'gitlab-token', url: "${GIT_REPO_URL}"
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    dockerImage = docker.build("${DOCKERHUB_REPO}:test2", "--no-cache .")
+                }
+            }
+        }
+        
+        stage('Push Docker Image to DockerHub') {
+            steps {
+                script {
+                    docker.withRegistry('', registryCredential) {
+                        dockerImage.push("test2")
+                    }
+                }
+            }
+        }
+        
+        
+        stage('Check and Manage Secret') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'gitlab-login', usernameVariable: 'GITLAB_USERNAME', passwordVariable: 'GITLAB_PASSWORD')]) {
+                        sh """
+                        argocd repo add $GIT_REPO_URL \
+                          --username \$GITLAB_USERNAME \
+                          --password \$GITLAB_PASSWORD
+                          """
+
+                    }
+                }
+            }
+        }
+        
+        
+        
+
+        stage('Create ArgoCD Application YAML') {
+            steps {
+                script {
+                    def yamlContent = """
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ${env.ARGOCD_APP}
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ${env.GIT_REPO_URL}
+    path: .
+    targetRevision: HEAD
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ${env.ARGOCD_APP}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+                    """
+                    
+                    writeFile file: 'argocd-application.yaml', text: yamlContent
+                    
+                }
+            }
+        }
+        
+
+
+        stage('Deploy to Kubernetes via ArgoCD') {
+            steps {
+                script {
+                    // Login to ArgoCD
+                    withCredentials([string(credentialsId: 'argocd-password', variable: 'PASS')]) {
+                        sh """
+                        argocd login $ARGOCD_SERVER --username admin --password \$PASS --insecure
+                        """
+                    
+                        // Apply the ArgoCD application
+                        sh """
+                        argocd app create --file argocd-application.yaml
+                        """
+                        echo "Waiting for 15 seconds..."
+                        sleep(time: 15, unit: 'SECONDS')
+                        // Sync the application
+                        sh """
+                        argocd app sync $ARGOCD_APP
+                        """
+                    }
+                }
+            }
+        }
+    }
+        
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
+
