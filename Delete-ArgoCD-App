@@ -1,0 +1,42 @@
+pipeline {
+    agent any
+    
+    environment {
+        ARGOCD_SERVER = '127.0.0.1:35883' // argocd-server adresi
+        ARGOCD_APP = 'app-flask' // argocd uygulamasının ve namespace'in adı.
+        KUBE_CONFIG = '/home/zub/.kube/config' // Jenkins'in kubernetes ile etkileşime girmesi için config dosyasını veriyoruz.
+        
+    }
+    
+    stages {
+        
+        stage('Delete Argo CD Application') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'argocd-password', variable: 'PASS')]) { // argocd-password --> argocd'nin kullanıcı şifresi, credential.
+                        // Argo CD server URL, username, and password (or token) should be securely stored and retrieved
+                        sh 'argocd login $ARGOCD_SERVER --username admin --password $PASS --insecure'
+                        sh 'argocd app delete $ARGOCD_APP --cascade --yes'
+                    }
+                }
+            }
+        }
+        
+        stage('Delete namespace') {
+            steps {
+                script {
+                sh 'kubectl delete ns $ARGOCD_APP --kubeconfig=${KUBE_CONFIG}'
+                // --kubeconfig=${KUBE_CONFIG}
+                }
+            }
+        }
+        
+    }
+    
+    post {
+        always {
+            cleanWs()
+        }
+    }
+    
+}
