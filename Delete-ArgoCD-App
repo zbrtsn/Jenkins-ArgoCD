@@ -2,9 +2,9 @@ pipeline {
     agent any
     
     environment {
-        ARGOCD_SERVER = '127.0.0.1:35883' // argocd-server adresi
-        ARGOCD_APP = 'app-flask' // argocd uygulamasının ve namespace'in adı.
-        KUBECONFIG = credentials('kubeconfig-file') // Jenkins'in kubernetes ile etkileşime girmesi için config dosyasını veriyoruz.
+        ARGOCD_SERVER = '127.0.0.1:35883' // ArgoCD server address
+        ARGOCD_APP = 'app-flask' // Name of the ArgoCD application and namespace.
+        KUBECONFIG = credentials('kubeconfig-file') // Provides the config file for Jenkins to interact with Kubernetes.
     }
     
     stages {
@@ -12,7 +12,7 @@ pipeline {
         stage('Delete Argo CD Application') {
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'argocd-password', variable: 'PASS')]) { // argocd-password --> argocd'nin kullanıcı şifresi, credential.
+                    withCredentials([string(credentialsId: 'argocd-password', variable: 'PASS')]) { // argocd-password --> ArgoCD user password, credential.
                         // Argo CD server URL, username, and password (or token) should be securely stored and retrieved
                         sh 'argocd login $ARGOCD_SERVER --username admin --password $PASS --insecure'
                         sh 'argocd app delete $ARGOCD_APP --cascade --yes'
