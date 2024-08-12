@@ -8,6 +8,8 @@ pipeline {
         ARGOCD_SERVER = '127.0.0.1:35883' // argocd-server adresi
         ARGOCD_APP = 'app-flask' // argocd uygulamasının adı. Hatta namespace oluşturmayı da bu ada göre yapıyor. istersen aşağıdaki yaml dosyasında değiştirebilirsin.
         KUBECONFIG = credentials('kubeconfig-file') // 'kubeconfig-id' yüklediğiniz kubeconfig dosyasının ID'sidir. Bu şekilde Jenkins kubernetes ile bağlantıya geçti.
+        KUBE_SERVICE = 'https://kubernetes.default.svc' // hedef kubernetes cluster'ın URL'si 
+        
         
         // üst kısım harici kod içinde değiştirilecekler:
         // - GitLab klonlayan adımın "branch" kısmı.
@@ -20,13 +22,13 @@ pipeline {
 
     stages {
         
-        stage('Clone Git Repository') {
+        stage('Clone Git Repository') { // Git projesinin çekilme aşaması
             steps {
                 git branch: 'latest', credentialsId: 'gitlab-token', url: "${GIT_REPO_URL}"
             }
         }
         
-        stage('Build Docker Image') {
+        stage('Build Docker Image') { // repo'dan çekilen projeyi build etme aşaması
             steps {
                 script {
                     dockerImage = docker.build("${DOCKERHUB_REPO}:test2", "--no-cache .")
@@ -34,7 +36,7 @@ pipeline {
             }
         }
         
-        stage('Push Docker Image to DockerHub') {
+        stage('Push Docker Image to DockerHub') { // docker hub'a push
             steps {
                 script {
                     docker.withRegistry('', registryCredential) {
@@ -45,7 +47,7 @@ pipeline {
         }
         
         
-        stage('Check and Manage Secret') {
+        stage('Check and Manage Secret') { // ArgoCD'ye GitLab repository'sini ekliyor. Repo private olduğu için aradaki bağlantıyı kurmamız lazım.
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'gitlab-login', usernameVariable: 'GITLAB_USERNAME', passwordVariable: 'GITLAB_PASSWORD')]) {
@@ -63,35 +65,35 @@ pipeline {
         
         
 
-        stage('Create ArgoCD Application YAML') {
+        stage('Create ArgoCD Application YAML') { // ArgoCd'de yeni uygulama oluşturacak, talimatları verecek olan yaml dosyası.
             steps {
                 script {
                     def yamlContent = """
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: ${env.ARGOCD_APP}
+  name: ${ARGOCD_APP}
   namespace: argocd
 spec:
   project: default
   source:
-    repoURL: ${env.GIT_REPO_URL}
-    path: .
+    repoURL: ${GIT_REPO_URL}
+    path: .    # proje dosyası, direkt çekildiği repo'nun ana dizininde bulunduğu için path belirtmeden tümünü alıyoruz.
     targetRevision: HEAD
     directory:
       recurse: true
   destination:
-    server: https://kubernetes.default.svc
-    namespace: ${env.ARGOCD_APP}
+    server: ${KUBE_SERVICE}
+    namespace: ${ARGOCD_APP}
   syncPolicy:
-    automated:
+    automated:   # argocd'nin otomatik senkronize etmesini aktif eden kısım
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true
+      - CreateNamespace=true     # hedef olarak gösterdiğimiz ${ARGOCD_APP} namespace yoksa oluşturmasına izin veriyor.
                     """
                     
-                    writeFile file: 'argocd-application.yaml', text: yamlContent
+                    writeFile file: 'argocd-application.yaml', text: yamlContent // üstte yazılan kodlar "argocd-application.yaml" adında dosya olarak yazdırılıyor.
                     
                 }
             }
@@ -102,32 +104,26 @@ spec:
         stage('Deploy to Kubernetes via ArgoCD') {
             steps {
                 script {
-                    // Login to ArgoCD
+                    // "argocd-password" credential'ından çektiği argocd şifresi ile giriş yapıyor. Kullanıcı adı zaten "admin" olduğundan direkt kodda verildi.
                     withCredentials([string(credentialsId: 'argocd-password', variable: 'PASS')]) {
                         sh """
                         argocd login $ARGOCD_SERVER --username admin --password \$PASS --insecure
                         """
                     
-                        // Apply the ArgoCD application
+                        
+                        // verdiğimiz yaml dosyası içindeki talimatlara göre argocd uygulamasını oluşturuyor.
                         sh """
-                        argocd app create --file argocd-application.yaml
-                        """
-                        echo "Waiting for 15 seconds..."
-                        sleep(time: 15, unit: 'SECONDS')
-                        // Sync the application
-                        sh """
-                        argocd app sync $ARGOCD_APP
+                        argocd app create --file argocd-application.yaml   
                         """
                     }
                 }
             }
         }
     }
-        
+    
     post {
         always {
-            cleanWs()
+            cleanWs() // Jenkins çalışma alanını siler:
         }
     }
 }
-
