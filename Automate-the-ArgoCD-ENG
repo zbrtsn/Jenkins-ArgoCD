@@ -23,7 +23,7 @@ pipeline {
         
         stage('Clone Git Repository') { // The stage where the Git project is cloned
             steps {
-                git branch: 'latest', credentialsId: 'gitlab-token', url: "${GIT_REPO_URL}"
+                git branch: 'latest', credentialsId: 'gitlab-login', url: "${GIT_REPO_URL}"
             }
         }
         
