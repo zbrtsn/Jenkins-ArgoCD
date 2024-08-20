@@ -44,6 +44,19 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy to Kubernetes via ArgoCD') {
+            steps {
+                script {
+                    // Logs in with the ArgoCD password from the "argocd-password" credential. The username is "admin" and is hardcoded in the script.
+                    withCredentials([string(credentialsId: 'argocd-password', variable: 'PASS')]) {
+                        sh """
+                        argocd login $ARGOCD_SERVER --username admin --password \$PASS --insecure
+                        """
+                    }
+                }
+            }
+        }
         
         
         stage('Check and Manage Secret') { // Adds the GitLab repository to ArgoCD. Since the repo is private, we need to establish the connection in between.
@@ -103,18 +116,10 @@ spec:
         stage('Deploy to Kubernetes via ArgoCD') {
             steps {
                 script {
-                    // Logs in with the ArgoCD password from the "argocd-password" credential. The username is "admin" and is hardcoded in the script.
-                    withCredentials([string(credentialsId: 'argocd-password', variable: 'PASS')]) {
-                        sh """
-                        argocd login $ARGOCD_SERVER --username admin --password \$PASS --insecure
-                        """
-                    
-                        
                         // Creates the ArgoCD application according to the instructions in the provided YAML file.
                         sh """
                         argocd app create --file argocd-application.yaml   
                         """
-                    }
                 }
             }
         }
