@@ -45,7 +45,19 @@ pipeline {
                 }
             }
         }
-        
+
+        stage('login to ArgoCD') {
+            steps {
+                script {
+                    // "argocd-password" credential'ından çektiği argocd şifresi ile giriş yapıyor. Kullanıcı adı zaten "admin" olduğundan direkt kodda verildi.
+                    withCredentials([string(credentialsId: 'argocd-password', variable: 'PASS')]) {
+                        sh """
+                        argocd login $ARGOCD_SERVER --username admin --password \$PASS --insecure
+                        """
+                    }
+                }
+            }
+        }
         
         stage('Check and Manage Secret') { // ArgoCD'ye GitLab repository'sini ekliyor. Repo private olduğu için aradaki bağlantıyı kurmamız lazım.
             steps {
@@ -62,9 +74,6 @@ pipeline {
             }
         }
         
-        
-        
-
         stage('Create ArgoCD Application YAML') { // ArgoCd'de yeni uygulama oluşturacak, talimatları verecek olan yaml dosyası.
             steps {
                 script {
@@ -99,18 +108,9 @@ spec:
             }
         }
         
-
-
         stage('Deploy to Kubernetes via ArgoCD') {
             steps {
                 script {
-                    // "argocd-password" credential'ından çektiği argocd şifresi ile giriş yapıyor. Kullanıcı adı zaten "admin" olduğundan direkt kodda verildi.
-                    withCredentials([string(credentialsId: 'argocd-password', variable: 'PASS')]) {
-                        sh """
-                        argocd login $ARGOCD_SERVER --username admin --password \$PASS --insecure
-                        """
-                    
-                        
                         // verdiğimiz yaml dosyası içindeki talimatlara göre argocd uygulamasını oluşturuyor.
                         sh """
                         argocd app create --file argocd-application.yaml   
