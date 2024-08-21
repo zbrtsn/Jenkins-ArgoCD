@@ -126,6 +126,15 @@ I made the application name and namespace in ArgoCD the same. You can change the
 `CreateNamespace=true` <br>
 This ensures that a namespace is created if it doesn’t already exist with the specified name.<br>
 
+------------
+## Related Projects
 
+Here are some related projects;
+
+[Basic Flask Project](https://github.com/zbrtsn/basic-to-do-flask.git) <br>
+The same project as in the code (GIT_REPO_URL), but the manifest (YAML) files are missing. <br><br>
+[Kubernetes-Kind](https://github.com/zbrtsn/kurbernetes-kind) <br>
+The YAML file should be similar to the one here.<br>
+The YAML files and the project files are in the same directory.
 
 
