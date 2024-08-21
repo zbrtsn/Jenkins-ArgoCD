@@ -1,4 +1,7 @@
 # Jenkins-ArgoCD
+Jenkins will pull the private GitLab repository. It will build the repository using the Dockerfile contained within the repo and push the image to Docker Hub.<br>
+Then, we'll add the GitLab username and password to ArgoCD since the repository is private. We'll write and create the YAML file for the ArgoCD application setup within the pipeline.<br>
+Finally, we'll issue the command to create the ArgoCD application with this YAML file and complete the process.
 
 ## Explanation
 
